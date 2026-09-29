@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+
+/* Tailwind v4 自带的 dark: 变体只认系统偏好，认不出手动切换。
+   这里改成认 <html> 上的 .dark 类，开关逻辑见 hooks/useTheme.ts */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* 极简无衬线字体：西文用系统 UI 字体，中文优先苹方 / 微软雅黑 */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+}
+
+@layer base {
+  :root {
+    /* 页面底色。以后要加静态 / 动态背景图，改这里的变量即可，组件不用动 */
+    --app-surface: var(--color-white);
+    --app-background-image: none;
+    /* 让日期选择器、滚动条等原生控件也跟着变浅色 */
+    color-scheme: light;
+  }
+
+  .dark {
+    --app-surface: var(--color-neutral-950);
+    color-scheme: dark;
+  }
+
+  html {
+    background-color: var(--app-surface);
+  }
+
+  /* 预留的背景层：位于底色之上、内容之下 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--app-background-image);
+    background-position: center;
+    background-size: cover;
+    pointer-events: none;
+  }
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人足迹 · 时间轴</title>
+    <script>
+      // 在 React 挂载前先定好主题，否则深色用户每次刷新都会先闪一下白屏。
+      // 这里的取值规则和 localStorage 键必须与 src/hooks/useTheme.ts 保持一致。
+      ;(function () {
+        try {
+          var preference = localStorage.getItem('personal-timeline:theme')
+          var isDark =
+            preference === 'dark' ||
+            (preference !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (isDark) document.documentElement.classList.add('dark')
+        } catch {
+          // 隐私模式下 localStorage 不可用，按浅色渲染
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
