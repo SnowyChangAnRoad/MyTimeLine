@@ -7,6 +7,9 @@ const BUTTON_CLASS =
 interface TimelineProps {
   events: TimelineEvent[]
   onOpenPhoto: OpenPhotoHandler
+  /** 被折叠的 key 集合（年份如 2024，月份如 2024-03），透传到 YearGroup */
+  collapsedKeys: Set<string>
+  onToggleCollapsed: (key: string) => void
   onSelectDirectory?: () => void
   onCreateEvent?: () => void
   /** 只在编辑模式传入，透传到事件卡片 */
@@ -38,6 +41,8 @@ function groupByYear(events: TimelineEvent[]): EventYearGroup[] {
 export function Timeline({
   events,
   onOpenPhoto,
+  collapsedKeys,
+  onToggleCollapsed,
   onSelectDirectory,
   onCreateEvent,
   editActions,
@@ -62,6 +67,8 @@ export function Timeline({
             key={group.year}
             year={group.year}
             events={group.events}
+            collapsedKeys={collapsedKeys}
+            onToggleCollapsed={onToggleCollapsed}
             onOpenPhoto={onOpenPhoto}
             editActions={editActions}
           />

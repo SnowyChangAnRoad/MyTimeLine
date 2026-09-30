@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BottomScrubber } from './components/BottomScrubber'
 import { DataSourceBar } from './components/DataSourceBar'
 import { EditToolbar } from './components/EditToolbar'
@@ -9,6 +9,7 @@ import { ThemeToggle } from './components/ThemeToggle'
 import { Timeline } from './components/Timeline'
 import { useDirectory } from './hooks/useDirectory'
 import { useFileSystem } from './hooks/useFileSystem'
+import { useOrphanCleanup } from './hooks/useOrphanCleanup'
 import { usePhotoDrafts } from './hooks/usePhotoDrafts'
 import { useTheme } from './hooks/useTheme'
 import { useTimelineScroll } from './hooks/useTimelineScroll'
@@ -58,6 +59,52 @@ function TimelineApp() {
   // 主区自己滚动（不是 window 滚动），底部 Scrubber 才能作为普通底栏而不是 fixed
   const mainRef = useRef<HTMLDivElement>(null)
   const { activeMonthKey, jumpToMonth, scrollByDelta } = useTimelineScroll(mainRef, data.events)
+
+  const orphanClean = useOrphanCleanup(dirHandle, data.events)
+
+  // 折叠状态集中在 App：集合里没有的 key 就是展开的，所以新增的年份/月份默认展开
+  const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
+  const toggleCollapsed = useCallback((key: string) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  /**
+   * 折叠后卡片不在 DOM 里，直接跳转会找不到锚点。所以这里先展开目标月份
+   * （连同它的年份），等展开的这次渲染提交后再真正滚动；已展开的就直接跳。
+   */
+  const pendingJumpRef = useRef<{ monthKey: string; behavior: ScrollBehavior } | null>(null)
+
+  const handleJumpToMonth = useCallback(
+    (monthKey: string, behavior: ScrollBehavior = 'smooth') => {
+      const yearKey = monthKey.slice(0, 4)
+      if (!collapsedKeys.has(monthKey) && !collapsedKeys.has(yearKey)) {
+        jumpToMonth(monthKey, behavior)
+        return
+      }
+
+      pendingJumpRef.current = { monthKey, behavior }
+      setCollapsedKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(monthKey)
+        next.delete(yearKey)
+        return next
+      })
+    },
+    [collapsedKeys, jumpToMonth],
+  )
+
+  // collapsedKeys 变了说明目标月份刚展开，这时 DOM 里才有对应的卡片可以量位置
+  useEffect(() => {
+    const pending = pendingJumpRef.current
+    if (pending === null) return
+    pendingJumpRef.current = null
+    jumpToMonth(pending.monthKey, pending.behavior)
+  }, [collapsedKeys, jumpToMonth])
 
   // 正在编辑的事件从 data 里现取，避免表单拿着过期副本
   const editingEvent =
@@ -170,10 +217,15 @@ function TimelineApp() {
             isSupported={isSupported}
             pendingDirectoryName={pendingDirectory?.name ?? null}
             errorMessage={directoryError}
+            orphanCleanState={orphanClean.state}
+            orphanCount={orphanClean.count}
+            orphanMessage={orphanClean.message}
             onPickDirectory={() => void handlePickDirectory()}
             onRestoreDirectory={() => void handleRestoreDirectory()}
             onExportData={handleExportData}
             onExportManifest={handleExportManifest}
+            onCleanOrphans={orphanClean.onPrimaryAction}
+            onCancelCleanOrphans={orphanClean.onCancel}
           />
         </div>
       </header>
@@ -184,6 +236,8 @@ function TimelineApp() {
             <Timeline
               events={data.events}
               onOpenPhoto={handleOpenPhoto}
+              collapsedKeys={collapsedKeys}
+              onToggleCollapsed={toggleCollapsed}
               onSelectDirectory={() => void handlePickDirectory()}
               onCreateEvent={openCreateForm}
               editActions={editActions}
@@ -198,7 +252,7 @@ function TimelineApp() {
         <BottomScrubber
           events={data.events}
           activeMonthKey={activeMonthKey}
-          onJumpToMonth={jumpToMonth}
+          onJumpToMonth={handleJumpToMonth}
           onScrollBy={scrollByDelta}
         />
       )}

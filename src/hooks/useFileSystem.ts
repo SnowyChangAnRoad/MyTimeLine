@@ -136,6 +136,26 @@ export function createFileSystemStore(root: FileSystemDirectoryHandle): Timeline
   }
 }
 
+/**
+ * 直接读一次 <root>/data.json 里记录的事件；文件缺失或格式非法时返回空数组。
+ *
+ * 用于「以磁盘为准」的只读校验（例如清理未引用图片时的保护集）：内存里的
+ * data 可能还落后于磁盘，也可能是磁盘上的引用尚未被覆盖，两边都算才安全。
+ * 注意这里不走 store.load()，避免碰到 store 内部的「外部改动检测」状态。
+ */
+export async function readDiskEvents(root: FileSystemDirectoryHandle): Promise<TimelineEvent[]> {
+  let raw: string
+  try {
+    const handle = await root.getFileHandle(DATA_FILE_NAME)
+    const file = await handle.getFile()
+    raw = await file.text()
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'NotFoundError') return []
+    throw error
+  }
+  return parseTimelineData(raw)?.events ?? []
+}
+
 function parseTimelineData(raw: string): TimelineData | null {
   let parsed: unknown
   try {

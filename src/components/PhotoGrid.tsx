@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePhotoDrafts } from '../hooks/usePhotoDrafts'
 import type { Photo } from '../types'
+
+/** 一行固定 5 张；4 个 gap（0.5rem）共 2rem，所以每张宽 (100% - 2rem) / 5 */
+const TILE_WIDTH_CLASS = 'w-[calc((100%-2rem)/5)] shrink-0'
 
 interface PhotoGridProps {
   photos: Photo[]
@@ -8,12 +11,41 @@ interface PhotoGridProps {
   onOpen: (index: number) => void
 }
 
-/** 图片网格：窄屏 2 列，宽屏 3 列 */
+/** 图片网格：固定一行 5 张，超出横向滚动 */
 export function PhotoGrid({ photos, onOpen }: PhotoGridProps) {
+  const listRef = useRef<HTMLUListElement>(null)
+
+  // React 的 onWheel 是 passive 监听，拦不了默认行为，只能自己挂原生监听
+  useEffect(() => {
+    const list = listRef.current
+    if (list === null) return
+
+    const handleWheel = (wheelEvent: WheelEvent) => {
+      // 按住 Ctrl 是缩放，触控板的横向滚动（deltaY 为 0）交给浏览器默认行为
+      if (wheelEvent.ctrlKey || wheelEvent.deltaY === 0) return
+
+      const maxScrollLeft = list.scrollWidth - list.clientWidth
+      // 只有横向还能往这个方向滚时才接管，滚到两端就放行，页面照常竖向滚动
+      const canScroll =
+        wheelEvent.deltaY < 0 ? list.scrollLeft > 0 : list.scrollLeft < maxScrollLeft
+      if (!canScroll) return
+
+      wheelEvent.preventDefault()
+      list.scrollLeft += wheelEvent.deltaY
+    }
+
+    list.addEventListener('wheel', handleWheel, { passive: false })
+    return () => list.removeEventListener('wheel', handleWheel)
+  }, [])
+
   return (
-    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <ul
+      ref={listRef}
+      // overscroll-x-contain：横滑到头不带动页面竖向滚动
+      className="flex gap-2 overflow-x-auto overscroll-x-contain"
+    >
       {photos.map((photo, index) => (
-        <li key={`${index}-${photo.src}`}>
+        <li key={`${index}-${photo.src}`} className={TILE_WIDTH_CLASS}>
           <PhotoTile photo={photo} onOpen={() => onOpen(index)} />
         </li>
       ))}
